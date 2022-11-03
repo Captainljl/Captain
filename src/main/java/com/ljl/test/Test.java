@@ -1,16 +1,20 @@
 package com.ljl.test;
 
-import java.util.concurrent.TimeUnit;
+import com.alibaba.fastjson.JSON;
+import com.google.gson.Gson;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class Test {
 
     public static void main(String[] args) throws InterruptedException {
-        Test test = new Test();
-        int start = 1000000;
-        while (start -- > 0) {
-            TimeUnit.MILLISECONDS.sleep(10);
-            test.test(new Person());
-        }
+        Map<String, String> hashMap = new HashMap();
+        hashMap.put("userName", "liujialei");
+
+        System.out.println(hashMap.getClass());
+        System.out.println(new Gson().toJson(hashMap));
+        System.out.println(JSON.toJSONString(hashMap));
     }
 
 

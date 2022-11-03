@@ -1,0 +1,34 @@
+# 信息上报时序图
+@startuml
+
+header 信息上报时序图
+
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+box "公网"
+entity      公司
+participant nginx
+participant 数据收集服务
+participant 公网文件存储服务器
+end box
+
+
+
+box "私网"
+control     内网文件接收服务器
+database    Oracle
+participant 数据展示服务
+end box
+
+公司 -> nginx : 信息上报
+note right: 定位信息、企业信息、司机信息
+nginx -> 数据收集服务 : 收集信息
+数据收集服务 -> 公网文件存储服务器 : 信息持久化到服务器
+
+内网文件接收服务器 -> 公网文件存储服务器 : 定时收集采信息
+内网文件接收服务器 -> Oracle : 消息存储到数据库
+数据展示服务 -> Oracle : 读取信息进行展示
+
+
+@enduml
