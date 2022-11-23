@@ -1,0 +1,121 @@
+@startuml
+
+header 原始每月核算成本流程 -- 编译部分
+
+actor       核算人员
+participant cost平台
+
+participant 归纳脚本
+
+participant hyena
+participant husky
+participant corgi
+
+participant bulldog
+
+
+database    builder
+database    miui_rom
+
+核算人员 -> cost平台 : 每月去数据平台成本平台拉取生产力平台总费用
+activate cost平台
+cost平台 -> 核算人员 : 构建费用详情信息
+deactivate cost平台
+
+核算人员 -> 归纳脚本 : 核算人员执行核算脚本
+activate 归纳脚本
+归纳脚本 -> 核算人员 : 核算人员通过归纳脚本将明细聚合成编译、cdn、s3等等几部分
+deactivate 归纳脚本
+
+核算人员 -> husky : 确认成本后将构建成本录入husky，
+husky -> builder : husky将编译成本存储到数据库cost_on_month表
+
+=== 成本比例比例入库 ==
+
+alt 计算成本比例
+核算人员 -> hyena : step2：出发成本比例计算
+hyena -> miui_rom : 首先将重打包和特殊打包的责任人入库，存入b_accounting_device_group_map表中
+
+hyena -> bulldog : 请求bulldog
+activate bulldog
+bulldog -> hyena : 获取cdn占比数据
+deactivate bulldog
+
+hyena -> miui_rom : 将机型版本cdn占比入库，存入：b_accounting_device_cost_percent
+
+hyena -> husky : 获取husky部分编译成本
+activate husky
+husky -> hyena : 按照部门维度返回正式任务打包列表
+deactivate husky
+
+hyena -> miui_rom : 将获取到的数据入库，存入：b_accounting_build_percent TAG = 0
+
+hyena -> husky : 获取corgi部分编译成本
+activate husky
+husky -> hyena : 按照部门维度返回测试任务打包列表
+deactivate husky
+
+hyena -> miui_rom : 将获取到的数据入库，存入：b_accounting_build_percent TAG = 1
+
+alt 解析成本比例
+
+hyena -> miui_rom : 读取刚刚存入的 cdn占比数据，b_accounting_device_cost_percent
+activate miui_rom
+miui_rom -> hyena : 返回cdn 占比数据，并且对cdn占比数据进行device、version、codebase维度的聚合
+deactivate miui_rom
+
+hyena -> miui_rom : 根据device、version、codebase 的在 b_rom_build 表中获取打包记录
+activate miui_rom
+miui_rom -> hyena : 返回对应条件的打包记录列表
+deactivate miui_rom
+
+    alt 根据列表的size对成本机型分摊
+        else size=0
+            hyena -> miui_rom : 将成本根据 cdn 占比数据（b_accounting_device_cost_percent）的region 进行入库， cn中国区，剩下的国际业务部
+            note right : 理论上比较少，同时这边编译的占比会是0
+
+        else size=1 表示一个dvc有一个打包记录
+            hyena -> miui_rom : 根据device、version、codebase 获取属于这个维度的打包成本占比数
+            hyena -> miui_rom : 去重打包记录表中 b_accounting_device_group_map 获取打包成本负责人，
+            note right : 这种情况最多
+                alt 根据获取到的成本负责人多少进行分摊
+                else 没有获取到成本负责人
+                    hyena -> miui_rom : 将成本根据 cdn 占比数据（b_accounting_device_cost_percent）的region 进行入库， cn中国区，剩下的国际业务部
+                    note right : 打包比例均摊
+                else 获取到了成本负责人
+                    hyena -> miui_rom : 将打包成本按照负责人来进行录入，
+                    note right : 打包比例均摊
+                end
+
+        else size>1 表示一个dvc有多个打包记录
+            hyena -> miui_rom : 根据device、version、codebase 获取属于这个维度的打包成本占比数
+            alt 判断是不是重打包
+            else 如果不是重打包导致的，那么选取最后一次打包记录
+                hyena -> miui_rom : 如果获取到了那么还是按照负责人来，如果没有获取到那么按照默认来，
+                note right : 打包比例均摊
+            else 如果是重打包导致的，那么算到重打包的责任人身上
+                hyena -> miui_rom :
+                note right : 打包比例均摊
+            end
+    end
+
+end
+
+hyena -> miui_rom : 将剩余的不在上述dvc中的编译成本入库：b_accounting_percent 表
+
+
+
+end
+
+=== 成本比例比例入库 ==
+
+核算人员 -> hyena : step3：成本入库
+hyena -> miui_rom : 将成本总数入库 b_accounting_cost
+hyena -> miui_rom : 在 b_accounting_cost 表中获取成本总数，在 b_accounting_percent 表中获取到成本百分比，
+hyena -> miui_rom : 将总数和比例相乘得到具体的钱数，存入 b_accounting_device 表中，
+
+核算人员 -> hyena : step4：发送账单
+hyena -> miui_rom : 读取b_accounting_device 表的数据，聚合之后再发送到cost平台
+
+
+@enduml
